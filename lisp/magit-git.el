@@ -300,11 +300,17 @@ Return t if the first (and usually only) output line is the
 string \"true\", otherwise return nil."
   (equal (magit-git-str args) "true"))
 
+(make-obsolete 'magit-git-true "\
+it doesn't make a distinction between false and neither false nor true.")
+
 (defun magit-git-false (&rest args)
   "Execute Git with ARGS, returning t if it prints \"false\".
 Return t if the first (and usually only) output line is the
 string \"false\", otherwise return nil."
   (equal (magit-git-str args) "false"))
+
+(make-obsolete 'magit-git-false "\
+it doesn't make a distinction between true and neither false nor true.")
 
 (defun magit-git-insert (&rest args)
   "Execute Git with ARGS, inserting its output at point.
@@ -538,19 +544,22 @@ returning the truename."
          (error "Not inside a Git repository: %s" default-directory)))))
 
 (defun magit-inside-gitdir-p ()
-  "Return t if `default-directory' is below a repository directory."
+  "Return t if `default-directory' is below a repository directory.
+TODO error"
   ;; This does not work if the gitdir is not located inside the
   ;; working tree: (magit-rev-parse-p "--is-inside-git-dir").
   (-when-let (gitdir (magit-git-dir))
     (file-in-directory-p default-directory gitdir)))
 
 (defun magit-inside-worktree-p ()
-  "Return t if `default-directory' is below the work tree of a repository."
-  (magit-rev-parse-p "--is-inside-work-tree"))
+  "Return t if `default-directory' is below the work tree of a repository.
+TODO error"
+  (magit-rev-parse-true-p "--is-inside-work-tree"))
 
 (defun magit-bare-repo-p ()
-  "Return t if the current repository is bare."
-  (magit-rev-parse-p "--is-bare-repository"))
+  "Return t if the current repository is bare.
+TODO error"
+  (magit-rev-parse-true-p "--is-bare-repository"))
 
 (defun magit-git-repo-p (directory &optional non-bare)
   "Return t if DIRECTORY is a Git repository.
@@ -776,6 +785,15 @@ ignore `magit-git-debug'."
 Return t if the first (and usually only) output line is the
 string \"true\", otherwise return nil."
   (magit-git-true "rev-parse" args))
+
+(make-obsolete 'magit-rev-parse-p 'magit-rev-parse-true-p)
+
+(defun magit-rev-parse-true-p (&rest args)
+  "TODO"
+  (pcase (magit-git-str "rev-parse" args)
+    ("true" t)
+    ("false" nil)
+    (_ (error "magit-rev-parse-true-p: neither true nor false"))))
 
 (defun magit-rev-verify (rev)
   (magit-rev-parse-safe "--verify" rev))
@@ -1724,6 +1742,19 @@ Return a list of two integers: (A>B B>A)."
     (if magit--refresh-cache
         (equal "true" (car (magit-config-get-from-cached-list key)))
       (magit-git-true "config" "--bool" key))))
+
+(defun magit-config-true-p (&rest keys)
+  "Return t if value of Git config entry specified by KEYS is \"true\"
+If the value is \"false\", then return nil.
+If it's neither, then raise an error.
+
+\"true\" can also be spelled as \"yes\", \"on\", and \"1\".
+\"false\" can also be spelled as \"no\", \"off\", and \"0\".
+Case is insignificant."
+  )
+
+(defun magit-config-false-p (&rest keys)
+  )
 
 (defun magit-set (val &rest keys)
   "Set Git config settings specified by KEYS to VAL."
