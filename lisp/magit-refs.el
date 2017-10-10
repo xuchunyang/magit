@@ -388,7 +388,7 @@ different, but only if you have customized the option
 
 ;;;; Section Variables
 
-(defvar magit-refs-local-branch-format "%4c %-25n %U%m\n"
+(defvar magit-refs-local-branch-format "%4c %-25n %U%m\n" ; TODO add %P
   "Format used for local branches in refs buffers.")
 (defvar magit-refs-remote-branch-format "%4c %-25n %m\n"
   "Format used for remote branches in refs buffers.")
@@ -421,15 +421,18 @@ line is inserted at all."
     (magit-insert-heading "Branches:")
     (dolist (line (magit-git-lines "branch" "--format=\
 %(HEAD)%00%(refname:short)%00%(objectname:short)%00%(subject)%00\
-%(upstream:short)%00%(upstream)%00%(upstream:track,nobracket)"
+%(upstream:short)%00%(upstream)%00%(upstream:track,nobracket)%00\
+%(push:short)%00%(push:track,nobracket)"
                                    (cadr magit-refresh-args)))
       (pcase-let ((`(,head ,branch ,hash ,message
-                           ,upstream ,uref ,utrack)
+                           ,upstream ,uref ,utrack
+                           ,push ,ptrack)
                    (-replace "" nil (split-string line "\0"))))
         (magit-insert-branch
          (and (not (string-prefix-p "(HEAD detached" branch)) branch)
          magit-refs-local-branch-format (and (equal head "*") branch)
-         'magit-branch-local hash message upstream uref utrack)))
+         'magit-branch-local hash message
+         upstream uref utrack push ptrack)))
     (insert ?\n)
     (magit-make-margin-overlay nil t)))
 
@@ -468,7 +471,7 @@ line is inserted at all."
 
 (defun magit-insert-branch-1
     (section branch format current face &optional hash message
-             upstream uref utrack)
+             upstream uref utrack push ptrack)
   "For internal use, don't add to a hook."
   (let* ((focus (car magit-refresh-args))
          (head  (or focus "HEAD"))
@@ -484,6 +487,8 @@ line is inserted at all."
                                  (if (string-prefix-p "refs/heads/" uref)
                                      'magit-branch-local
                                    'magit-branch-remote))))
+    (when push
+      (setq push (substring push 0 (- (1+ (length branch))))))
     (magit-insert-heading
       (format-spec
        format
@@ -500,6 +505,16 @@ line is inserted at all."
                               upstream)
                             (if (and utrack (not (equal utrack "gone")))
                                 (concat " " utrack)
+                              ""))
+                  ""))
+         (?P . ,(if ptrack
+                    (format (propertize "[%s%s] " 'face 'magit-dimmed)
+                            (propertize push 'face
+                                        (if (equal ptrack "gone")
+                                            'error
+                                          'magit-branch-remote))
+                            (if (and ptrack (not (equal ptrack "gone")))
+                                (concat " " ptrack)
                               ""))
                   "")))))
     (when (magit-buffer-margin-p)
