@@ -290,9 +290,13 @@ ignored) files.
 
 ;;;; Unstage
 
-(defun magit-unstage ()
-  "Remove the change at point from the staging area."
-  (interactive)
+(defun magit-unstage (&optional intent-to-add)
+  "Remove the change at point from the staging area.
+
+If, and only if, operating on the file level, then a prefix
+argument means to unstage the changes, but to keep previously
+untracked files staged using \"git add --intent-to-add\")."
+  (interactive "P")
   (--when-let (magit-apply--get-selection)
     (pcase (list (magit-diff-type) (magit-diff-scope))
       (`(untracked     ,_) (user-error "Cannot unstage untracked changes"))
@@ -300,9 +304,11 @@ ignored) files.
       (`(staged    region) (magit-apply-region it "--reverse" "--cached"))
       (`(staged      hunk) (magit-apply-hunk   it "--reverse" "--cached"))
       (`(staged     hunks) (magit-apply-hunks  it "--reverse" "--cached"))
-      (`(staged      file) (magit-unstage-1 (list (magit-section-value it))))
-      (`(staged     files) (magit-unstage-1 (magit-region-values)))
-      (`(staged      list) (magit-unstage-all))
+      (`(staged      file) (magit-unstage-1 (list (magit-section-value it))
+                                            intent-to-add))
+      (`(staged     files) (magit-unstage-1 (magit-region-values)
+                                            intent-to-add))
+      (`(staged      list) (magit-unstage-all intent-to-add))
       (`(committed     ,_) (if magit-unstage-committed
                                (magit-reverse-in-index)
                              (user-error "Cannot unstage committed changes")))
@@ -326,22 +332,35 @@ without requiring confirmation."
   (magit-with-toplevel
     (magit-unstage-1 (list file))))
 
-(defun magit-unstage-1 (files)
+(defun magit-unstage-1 (files &optional intent-to-add)
   (magit-wip-commit-before-change files " before unstage")
   (if (magit-no-commit-p)
-      (magit-run-git "rm" "--cached" "--" files)
-    (magit-run-git "reset" "HEAD" "--" files))
+      (magit-call-git "rm" "--cached" "--" files)
+    (magit-call-git "reset" "HEAD" "--" files))
+  (--when-let (and intent-to-add
+                   (-intersection files (magit-untracked-files)))
+    (magit-call-git "add" "--intent-to-add" "--" it))
+  (magit-refresh)
   (magit-wip-commit-after-apply files " after unstage"))
 
 ;;;###autoload
-(defun magit-unstage-all ()
-  "Remove all changes from the staging area."
+(defun magit-unstage-all (&optional intent-to-add)
+  "Remove all changes from the staging area.
+
+A prefix argument means to unstage the changes,
+but to keep previously untracked files staged
+using \"git add --intent-to-add\")."
   (interactive)
   (when (or (and (not (magit-anything-unstaged-p))
                  (not (magit-untracked-files)))
             (magit-confirm 'unstage-all-changes))
     (magit-wip-commit-before-change nil " before unstage")
-    (magit-run-git "reset" "HEAD" "--")
+    (let ((files (magit-staged-files)))
+      (magit-call-git "reset" "HEAD" "--")
+      (--when-let (and intent-to-add
+                       (-intersection files (magit-untracked-files)))
+        (magit-call-git "add" "--intent-to-add" "--" it)))
+    (magit-refresh)
     (magit-wip-commit-after-apply nil " after unstage")))
 
 ;;;; Discard
