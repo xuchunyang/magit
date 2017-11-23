@@ -237,6 +237,9 @@ Changes since v2.11.0
   done to preserves space.  The option `magit-refs-show-remote-prefix'
   can be used to revert this change.
 
+* Added commands `magit-cherry-harvest', `magit-cherry-move'
+  `magit-cherry-spinoff'.  #3134
+
 Fixes since v2.11.0
 -------------------
 
