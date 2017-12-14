@@ -874,7 +874,7 @@ Do not add this to a hook variable."
          (remove "--literal-pathspecs" magit-git-global-arguments)))
     (magit-git-wash (apply-partially #'magit-log-wash-log 'log)
       "log"
-      (format "--format=%%h%s%%x00%s%%x00%%aN%%x00%%at%%x00%%s%s"
+      (format "--format=%%x00%%h%s%%x00%s%%x00%%aN%%x00%%at%%x00%%s%s"
               (if (member "--decorate" args) "%d" "")
               (if (member "--show-signature" args)
                   (progn (setq args (remove "--show-signature" args)) "%G?")
@@ -908,7 +908,7 @@ Do not add this to a hook variable."
 
 (defconst magit-log-heading-re
   (concat "^"
-          "\\(?4:[-_/|\\*o. ]*\\)"                 ; graph
+          "\\(?4:[^\0\n]*\\)\0"                    ; graph
           "\\(?1:[0-9a-fA-F]+\\)"                  ; sha1
           "\\(?3:[^\0\n]+)\\)?\0"                  ; refs
           "\\(?7:[BGUXYREN]\\)?\0"                 ; gpg
@@ -930,7 +930,7 @@ Do not add this to a hook variable."
 
 (defconst magit-log-bisect-vis-re
   (concat "^"
-          "\\(?4:[-_/|\\*o. ]*\\)"                 ; graph
+          "\\(?4:[^\0]*\\)\0"                      ; graph
           "\\(?1:[0-9a-fA-F]+\\)"                  ; sha1
           "\\(?3:[^\0\n]+)\\)?\0"                  ; refs
           "\\(?2:.*\\)$"))                         ; msg
@@ -965,18 +965,14 @@ Do not add this to a hook variable."
 
 (defun magit-log-wash-log (style args)
   (setq args (-flatten args))
-  (when (and (member "--graph" args)
-             (member "--color" args))
-    (let ((ansi-color-apply-face-function
-           (lambda (beg end face)
-             (put-text-property beg end 'font-lock-face
-                                (or face 'magit-log-graph)))))
-      (ansi-color-apply-on-region (point-min) (point-max))))
   (when (eq style 'cherry)
     (reverse-region (point-min) (point-max)))
   (let ((magit-log-count 0))
-    (magit-wash-sequence (apply-partially 'magit-log-wash-rev style
-                                          (magit-abbrev-length)))
+    (magit-wash-sequence
+     (apply-partially 'magit-log-wash-rev style
+                      (magit-abbrev-length)
+                      (and (member "--graph" args)
+                           (member "--color" args))))
     (if (derived-mode-p 'magit-log-mode)
         (when (eq magit-log-count (magit-log-get-commit-limit))
           (magit-insert-section (longer)
@@ -991,7 +987,7 @@ Do not add this to a hook variable."
              'mouse-face 'magit-section-highlight)))
       (insert ?\n))))
 
-(cl-defun magit-log-wash-rev (style abbrev)
+(cl-defun magit-log-wash-rev (style abbrev colorize)
   (when (derived-mode-p 'magit-log-mode)
     (cl-incf magit-log-count))
   (looking-at (pcase style
@@ -1004,9 +1000,6 @@ Do not add this to a hook variable."
                 (`bisect-log magit-log-bisect-log-re)))
   (magit-bind-match-strings
       (hash msg refs graph author date gpg cherry _ refsub side) nil
-    (setq msg (substring-no-properties msg))
-    (when refs
-      (setq refs (substring-no-properties refs)))
     (let ((align (not (member "--stat" (cadr magit-refresh-args))))
           (non-graph-re (if (eq style 'bisect-vis)
                             magit-log-bisect-vis-re
@@ -1038,6 +1031,9 @@ Do not add this to a hook variable."
         (when align
           (insert (propertize hash 'face 'magit-hash) ?\s))
         (when graph
+          (when colorize
+            (setq ansi-color-context nil)
+            (setq graph (ansi-color-apply graph)))
           (insert graph))
         (unless align
           (insert (propertize hash 'face 'magit-hash) ?\s))
