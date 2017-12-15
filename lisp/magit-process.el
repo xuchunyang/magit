@@ -261,7 +261,7 @@ optional NODISPLAY is non-nil also display it."
   "Kill the process at point."
   (interactive)
   (magit-section-when process
-    (let ((process (magit-section-value it)))
+    (let ((process (oref it value)))
       (if (eq (process-status process) 'run)
           (when (magit-confirm 'kill-process)
             (kill-process process))
@@ -515,7 +515,7 @@ Magit status buffer."
     (process-put process 'default-dir default-directory)
     (when inhibit-magit-refresh
       (process-put process 'inhibit-refresh t))
-    (setf (magit-section-process section) process)
+    (oset section process process)
     (with-current-buffer process-buf
       (set-marker (process-mark process) (point)))
     (when input
@@ -523,7 +523,7 @@ Magit status buffer."
         (process-send-region process (point-min) (point-max))
         (process-send-eof    process)))
     (setq magit-this-process process)
-    (setf (magit-section-value section) process)
+    (oset section value process)
     (magit-process-display-buffer process)
     process))
 
@@ -574,23 +574,23 @@ Magit status buffer."
 
 (defun magit-process-truncate-log ()
   (let* ((head nil)
-         (tail (magit-section-children magit-root-section))
+         (tail (oref magit-root-section children))
          (count (length tail)))
     (when (> (1+ count) magit-process-log-max)
       (while (and (cdr tail)
                   (> count (/ magit-process-log-max 2)))
         (let* ((inhibit-read-only t)
                (section (car tail))
-               (process (magit-section-process section)))
+               (process (oref section process)))
           (cond ((not process))
                 ((memq (process-status process) '(exit signal))
-                 (delete-region (magit-section-start section)
-                                (1+ (magit-section-end section)))
+                 (delete-region (oref section start)
+                                (1+ (oref section end)))
                  (cl-decf count))
                 (t
                  (push section head))))
         (pop tail))
-      (setf (magit-section-children magit-root-section)
+      (oset magit-root-section children
             (nconc (reverse head) tail)))))
 
 (defun magit-process-sentinel (process event)
@@ -630,7 +630,7 @@ Magit status buffer."
                        ((or "rebase" "am")   'rebase-sequence)
                        ((or "cherry-pick" "revert") 'sequence)))
                    (status)))
-              (goto-char (magit-section-start it))
+              (goto-char (oref it start))
               (magit-section-update-highlight))))))))
 
 (defun magit-process-filter (proc string)
@@ -831,7 +831,7 @@ as argument."
     (with-current-buffer process-buf
       (magit-process-unset-mode-line)
       (let ((inhibit-read-only t)
-            (marker (magit-section-start section)))
+            (marker (oref section start)))
         (goto-char marker)
         (save-excursion
           (delete-char 3)
@@ -843,14 +843,14 @@ as argument."
                                       'magit-process-ng)))
           (set-marker-insertion-type marker t))
         (when magit-process-finish-apply-ansi-colors
-          (ansi-color-apply-on-region (magit-section-content section)
-                                      (magit-section-end section)))
-        (if (= (magit-section-end section)
+          (ansi-color-apply-on-region (oref section content)
+                                      (oref section end)))
+        (if (= (oref section end)
                (+ (line-end-position) 2))
             (save-excursion
               (goto-char (1+ (line-end-position)))
               (delete-char -1)
-              (setf (magit-section-content section) nil))
+              (oset section content nil))
           (let ((buf (magit-process-buffer t)))
             (when (and (= arg 0)
                        (not (--any-p (eq (window-buffer it) buf)
@@ -860,9 +860,9 @@ as argument."
     (let ((msg
            (or (and (buffer-live-p process-buf)
                     (with-current-buffer process-buf
-                      (and (magit-section-content section)
+                      (and (oref section content)
                            (save-excursion
-                             (goto-char (magit-section-end section))
+                             (goto-char (oref section end))
                              (run-hook-wrapped
                               'magit-process-error-message-regexps
                               (lambda (re)
