@@ -109,7 +109,7 @@ the fallback default which is `show'."
              magit-section-cached-visibility))
 
 (defcustom magit-section-cache-visibility-types
-  '(unpulled unpushed)
+  '(unpulled unpushed unstaged staged)
 "List of section types for which visibility should be cached."
   :package-version '(magit . "2.12.0")
   :group 'magit-section
